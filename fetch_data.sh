@@ -23,13 +23,5 @@ else
 fi
 
 echo -e "\nDownloading deca_model..."
-
-
-if [ ! -f "./data/deca_model.tar" ]; then
-    echo -e "\n开始下载 DECA 模型..."
-    ../dl_deca.sh
-else
-    echo -e "\nDECA 模型已存在，跳过下载..."
-fi
-
+cd ..
 

@@ -17,6 +17,16 @@ pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.co
 # download data
 # 创建目录并下载文件
 mkdir -p data MODNet/pretrained
-pip install gdown
-gdown --folder https://drive.google.com/drive/folders/1umYmlCulvIFNaqPjwod1SayFmSRHziyR -O MODNet/pretrained/
+pip install --upgrade gdown
+gdown https://drive.google.com/uc?id=1rLtc037Ra6Z6t0kp-gJ8P1ZKfzkKm070 -O data/
+
 source fetch_data.sh
+
+if [ ! -f "./DECA/data/deca_model.tar" ]; then
+    echo -e "\n开始下载 DECA 模型..."
+    gdown https://drive.google.com/uc?id=1rp8kdyLPvErw2dTmqtjISRVvQLj6Yzje -O ./DECA/data/
+else
+    echo -e "\nDECA 模型已存在，跳过下载..."
+fi
+
+gdown --folder https://drive.google.com/drive/folders/1umYmlCulvIFNaqPjwod1SayFmSRHziyR -O MODNet/pretrained/
