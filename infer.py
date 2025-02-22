@@ -53,9 +53,7 @@ class Infer(object):
         # Load pre-trained weights
         if args.model_checkpoint:
             ckpt_loaded = torch.load(args.model_checkpoint, map_location="cpu")
-            missing_keys, unexpected_keys = self.model.load_state_dict(
-                ckpt_loaded, strict=False
-            )
+            missing_keys, unexpected_keys = self.model.load_state_dict(ckpt_loaded, strict=False)
         self.setup_modnet()
         self.mask_hard_threshold = 0.5
 
@@ -74,14 +72,12 @@ class Infer(object):
         modnet.load_state_dict(torch.load(pretrained_ckpt, map_location="cpu"))
         self.modnet = modnet.eval().to(self.device)
         self.fa = face_alignment.FaceAlignment(
-            face_alignment.LandmarksType._2D,
+            face_alignment.LandmarksType.TWO_D,
             flip_input=False,
             device="cuda" if torch.cuda.is_available() else "cpu",
         )
 
-    def process_source_for_input_dict(
-        self, source_img: Image, data_transform, crop_center=False
-    ):
+    def process_source_for_input_dict(self, source_img: Image, data_transform, crop_center=False):
         data_dict = {}
         source_pose = self.fa.get_landmarks_from_image(np.asarray(source_img))[0]
 
@@ -95,25 +91,15 @@ class Infer(object):
                 )
             )
             center[1] -= size // 6
-            source_img = source_img.crop(
-                (center[0] - size, center[1] - size, center[0] + size, center[1] + size)
-            )
+            source_img = source_img.crop((center[0] - size, center[1] - size, center[0] + size, center[1] + size))
 
-        source_img = source_img.resize(
-            (self.image_size, self.image_size), Image.Resampling.LANCZOS
-        )
+        source_img = source_img.resize((self.image_size, self.image_size), Image.Resampling.LANCZOS)
         data_dict["source_img"] = data_transform(source_img)[None].to(self.device)
 
-        pred_mask = obtain_modnet_mask(
-            data_dict["source_img"][0], self.modnet, ref_size=512
-        )[0]
+        pred_mask = obtain_modnet_mask(data_dict["source_img"][0], self.modnet, ref_size=512)[0]
 
-        data_dict["source_mask"] = (
-            torch.from_numpy(pred_mask).float().to(self.device).unsqueeze(0)[None]
-        )
-        data_dict["source_keypoints"] = torch.from_numpy(
-            self.fa.get_landmarks_from_image(np.asarray(source_img))[0]
-        )[None]
+        data_dict["source_mask"] = torch.from_numpy(pred_mask).float().to(self.device).unsqueeze(0)[None]
+        data_dict["source_keypoints"] = torch.from_numpy(self.fa.get_landmarks_from_image(np.asarray(source_img))[0])[None]
 
         if (data_dict["source_mask"].shape) == 3:
             data_dict["source_mask"] = data_dict["source_mask"][..., -1]
@@ -128,18 +114,14 @@ class Infer(object):
         image_size = self.image_size
 
         lm_2d = data_dict["source_keypoints"][0].detach().cpu().numpy()
-        transform_ffhq = calc_ffhq_alignment(
-            lm_2d, size=imgs.shape[2], device=self.device
-        )
+        transform_ffhq = calc_ffhq_alignment(lm_2d, size=imgs.shape[2], device=self.device)
 
         theta = torch.FloatTensor(transform_ffhq["theta"])[None]
 
         if args.align_source:
             grid = torch.linspace(-1, 1, image_size)
             v, u = torch.meshgrid(grid, grid)
-            identity_grid = torch.stack([u, v, torch.ones_like(u)], dim=2).view(
-                1, -1, 3
-            )
+            identity_grid = torch.stack([u, v, torch.ones_like(u)], dim=2).view(1, -1, 3)
 
         if args.align_source:
             # Align input images using theta
@@ -156,18 +138,14 @@ class Infer(object):
 
             theta_ = torch.bmm(theta_, scale)[:, :2]
             align_warp = identity_grid.repeat_interleave(theta_.shape[0], dim=0)
-            align_warp = align_warp.bmm(theta_.transpose(1, 2)).view(
-                theta_.shape[0], image_size, image_size, 2
-            )
+            align_warp = align_warp.bmm(theta_.transpose(1, 2)).view(theta_.shape[0], image_size, image_size, 2)
 
             source_imgs = F.grid_sample(imgs, align_warp)
             source_masks = F.grid_sample(masks, align_warp)
         else:
             source_imgs, source_masks = imgs, masks
 
-        source_keypoints = torch.from_numpy(
-            self.fa.get_landmarks_from_image(tensor2image(source_imgs[0]))[0]
-        )[None]
+        source_keypoints = torch.from_numpy(self.fa.get_landmarks_from_image(tensor2image(source_imgs[0]))[0])[None]
         output_data_dict = {
             "source_img": source_imgs,
             "source_mask": source_masks,
@@ -175,9 +153,7 @@ class Infer(object):
         }
         return output_data_dict
 
-    def process_driver_img(
-        self, data_dict: dict, driver_image: Image, crop_center=False
-    ):
+    def process_driver_img(self, data_dict: dict, driver_image: Image, crop_center=False):
         driver_pose = self.fa.get_landmarks_from_image(np.asarray(driver_image))[0]
 
         if crop_center or driver_image.size[0] != driver_image.size[1]:
@@ -190,17 +166,13 @@ class Infer(object):
                 )
             )
             center[1] -= size // 6
-            driver_image = driver_image.crop(
-                (center[0] - size, center[1] - size, center[0] + size, center[1] + size)
-            )
+            driver_image = driver_image.crop((center[0] - size, center[1] - size, center[0] + size, center[1] + size))
 
         data_dict["target_img"] = self.data_transform(driver_image)[None]
         data_dict["target_mask"] = torch.zeros_like(data_dict["target_img"])
         landmark_input = np.asarray(driver_image)
         kp_scale = landmark_input.shape[0] // 2
-        data_dict["target_keypoints"] = torch.from_numpy(
-            self.fa.get_landmarks_from_image(landmark_input)[0] / kp_scale - 1
-        )[None]
+        data_dict["target_keypoints"] = torch.from_numpy(self.fa.get_landmarks_from_image(landmark_input)[0] / kp_scale - 1)[None]
         return data_dict
 
     def reuse_source_image(self, driver_image):
@@ -218,13 +190,9 @@ class Infer(object):
         if source_information_for_reuse is not None:
             data_dict = source_information_for_reuse.get("data_dict")
             if data_dict is None:
-                data_dict = self.process_source_for_input_dict(
-                    source_image, self.source_transform, crop_center
-                )
+                data_dict = self.process_source_for_input_dict(source_image, self.source_transform, crop_center)
         else:
-            data_dict = self.process_source_for_input_dict(
-                source_image, self.source_transform, crop_center
-            )
+            data_dict = self.process_source_for_input_dict(source_image, self.source_transform, crop_center)
         data_dict = self.process_driver_img(data_dict, driver_image, crop_center)
         for k, v in data_dict.items():
             data_dict[k] = data_dict[k].to(self.device)
@@ -250,7 +218,7 @@ class Infer(object):
         cv2.imwrite("results/render_result.png", render_result)
         cv2.imwrite("results/shape_result.png", shape_result)
         print("Successfully rendered")
-        
+
     def infer(self, source_image_path, driver_image_path, output_path):
         driver_img = Image.open(driver_image_path)
         source_image = Image.open(source_image_path)
@@ -267,16 +235,12 @@ def get_args():
 
     parser = argparse.ArgumentParser(conflict_handler="resolve")
     parser.add_argument("--save_dir", default=".", type=str)
-    parser.add_argument(
-        "--save_render", default="True", type=args_utils.str2bool, choices=[True, False]
-    )
+    parser.add_argument("--save_render", default="True", type=args_utils.str2bool, choices=[True, False])
     parser.add_argument("--model_checkpoint", default=default_model_path, type=str)
     parser.add_argument("--modnet_path", default=default_modnet_path, type=str)
     parser.add_argument("--random_seed", default=0, type=int)
     parser.add_argument("--debug", action="store_true")
-    parser.add_argument(
-        "--verbose", default="False", type=args_utils.str2bool, choices=[True, False]
-    )
+    parser.add_argument("--verbose", default="False", type=args_utils.str2bool, choices=[True, False])
     args, _ = parser.parse_known_args()
 
     parser = importlib.import_module(f"src.rome").ROME.add_argparse_args(parser)
@@ -300,12 +264,13 @@ class ROMELoader(RowDataLoader):
         return Infer(args)
 
     def run_video(self, row: RowData):
-        for target_img_path in tqdm(row.target.img_paths, desc="Infer"):
-            save_name = os.path.basename(target_img_path)
-            output_path = os.path.join(row.ori_output_dir, save_name)
-            self.model.infer(row.source_img_path, target_img_path, output_path)
-        row.output.merge_ori_output_video()
-        self.retarget_video()
+        if row.output.num_ori_output < row.num_frames:
+            for target_img_path in tqdm(row.target.img_paths, desc="Infer"):
+                save_name = change_extension(os.path.basename(target_img_path), ".jpg")
+                output_path = os.path.join(row.ori_output_dir, save_name)
+                self.model.infer(row.source_img_path, target_img_path, output_path)
+            row.output.merge_ori_output_video()
+        self.retarget_video(row)
 
 
 def test():
@@ -315,7 +280,11 @@ def test():
 
 def main():
     loader = ROMELoader()
-    loader.run_video(loader.all_data_rows[0])
-    
+    # row = loader.all_data_rows[0]
+    # loader.clear_output(row)
+    # loader.run_video(row)
+    loader.run_all()
+
+
 if __name__ == "__main__":
     main()
