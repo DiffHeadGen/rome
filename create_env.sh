@@ -21,6 +21,5 @@ pip install -e ../expdata
 # 创建目录并下载文件
 mkdir -p data MODNet/pretrained
 pip install gdown
-gdown https://drive.google.com/uc?id=1rLtc037Ra6Z6t0kp-gJ8P1ZKfzkKm070 -O data/
 gdown --folder https://drive.google.com/drive/folders/1umYmlCulvIFNaqPjwod1SayFmSRHziyR -O MODNet/pretrained/
 source fetch_data.sh
