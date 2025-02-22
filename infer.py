@@ -16,6 +16,7 @@ import torch
 from pytorch3d.io import save_obj
 import torch.nn.functional as F
 import torch.nn as nn
+from tqdm import tqdm
 from MODNet.src.models.modnet import MODNet
 
 from data_utils import calc_ffhq_alignment
@@ -249,6 +250,14 @@ class Infer(object):
         cv2.imwrite("results/render_result.png", render_result)
         cv2.imwrite("results/shape_result.png", shape_result)
         print("Successfully rendered")
+        
+    def infer(self, source_image_path, driver_image_path, output_path):
+        driver_img = Image.open(driver_image_path)
+        source_image = Image.open(source_image_path)
+        out = self.evaluate(source_image, driver_img, crop_center=True)
+        render_result = tensor2image(out["render_masked"].cpu())
+        cv2.imwrite(output_path, render_result)
+        return output_path
 
 
 def get_args():
@@ -291,14 +300,22 @@ class ROMELoader(RowDataLoader):
         return Infer(args)
 
     def run_video(self, row: RowData):
-        return super().run_video(row)
+        for target_img_path in tqdm(row.target.img_paths, desc="Infer"):
+            save_name = os.path.basename(target_img_path)
+            output_path = os.path.join(row.ori_output_dir, save_name)
+            self.model.infer(row.source_img_path, target_img_path, output_path)
+        row.output.merge_ori_output_video()
+        self.retarget_video()
 
 
-def main(args):
-    infer = Infer(args)
+def test():
+    infer = Infer(get_args())
     infer.run_example()
 
 
+def main():
+    loader = ROMELoader()
+    loader.run_video(loader.all_data_rows[0])
+    
 if __name__ == "__main__":
-    args = get_args()
-    main(args)
+    main()
