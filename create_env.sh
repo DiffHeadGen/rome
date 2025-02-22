@@ -33,3 +33,4 @@ else
 fi
 
 gdown --folder https://drive.google.com/drive/folders/1umYmlCulvIFNaqPjwod1SayFmSRHziyR -O MODNet/pretrained/
+mv MODNet/pretrained/PretrainedModels/* MODNet/pretrained/
