@@ -77,7 +77,7 @@ class Infer(object):
             center[1] -= size // 6
             source_img = source_img.crop((center[0] - size, center[1] - size, center[0] + size, center[1] + size))
 
-        source_img = source_img.resize((self.image_size, self.image_size), Image.ANTIALIAS)
+        source_img = source_img.resize((self.image_size, self.image_size), Image.Resampling.LANCZOS)
         data_dict['source_img'] = data_transform(source_img)[None].to(self.device)
 
         pred_mask = obtain_modnet_mask(data_dict['source_img'][0], self.modnet, ref_size=512)[0]
